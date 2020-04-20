@@ -18,8 +18,8 @@ namespace zabbixinstall
                 Update.UpdateService();
             }
             else if (Check.CheckServices(ref Data.CheckServices) == false)
-            { 
-                
+            {
+                Install.InstallZabbix();
             }
         }
     }
@@ -30,8 +30,32 @@ namespace zabbixinstall
             ServiceController Services = new ServiceController(Data.ServiceName);
             if ((Services.Status.Equals(ServiceControllerStatus.Stopped)) || (Services.Status.Equals(ServiceControllerStatus.StopPending)))
             {
-                ManagementObjectSearcher i = new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_Processor");
+                ManagementObjectSearcher i = new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_Service");
                 foreach (ManagementObject y in i.Get())
+                {
+                    try
+                    {
+                        if (Convert.ToString(y["DisplayName"]) == Data.ServiceName)
+                        {
+                            Data.ServicePath = Convert.ToString(y["PathName"]);
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        Data.ServicePath = "Не определено";
+                        break;
+                    }
+                }
+                i.Dispose();
+                if (String.IsNullOrEmpty(Data.ServicePath))
+                {
+                    Data.ServicePath = "Не определено";
+                }
+                string[] temp = Data.ServicePath.Split('"');
+                Data.ServicePath = temp[1].Replace(Data.Zabbix_agentd, "");
+                ManagementObjectSearcher u = new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_Processor");
+                foreach (ManagementObject y in u.Get())
                 {
                     Data.AddressWidth = Convert.ToInt16(y["AddressWidth"]);
                     break;
@@ -43,6 +67,7 @@ namespace zabbixinstall
                     try
                     {
                         Services.Start();
+                        Services.WaitForStatus(ServiceControllerStatus.Running);
                     }
                     catch (InvalidOperationException Ex)
                     {
@@ -55,6 +80,7 @@ namespace zabbixinstall
                     try
                     {
                         Services.Start();
+                        Services.WaitForStatus(ServiceControllerStatus.Running);
                     }
                     catch (InvalidOperationException Ex)
                     {
@@ -86,27 +112,43 @@ namespace zabbixinstall
                 {
                     Data.ServicePath = "Не определено";
                 }
+                string[] temp = Data.ServicePath.Split('"');
+                Data.ServicePath = temp[1].Replace(Data.Zabbix_agentd, "");
                 Services.Stop();
                 UpdateService();
             }
         }
         static void GetNewFile64()
         {
-            DellOldFile();
-            File.Copy($"{ Data.SharedPath64}\\{Data.Zabbixscr}", $"{Data.ServicePath}\\{Data.Zabbixscr}", true);
-            File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_agentd}", $"{Data.ServicePath}\\{Data.Zabbix_agentd}", true);
-            File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_agentd_conf}", $"{Data.ServicePath}\\{Data.Zabbix_agentd_conf}", true);
-            File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_get}", $"{Data.ServicePath}\\{Data.Zabbix_get}", true);
-            File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_sender}", $"{Data.ServicePath}\\{Data.Zabbix_sender}", true);
+            try
+            {
+                DellOldFile();
+                File.Copy($"{ Data.SharedPath64}\\{Data.Zabbixscr}", $"{Data.ServicePath}\\{Data.Zabbixscr}", true);
+                File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_agentd}", $"{Data.ServicePath}\\{Data.Zabbix_agentd}", true);
+                File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_agentd_conf}", $"{Data.ServicePath}\\{Data.Zabbix_agentd_conf}", true);
+                File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_get}", $"{Data.ServicePath}\\{Data.Zabbix_get}", true);
+                File.Copy($"{ Data.SharedPath64}\\{Data.Zabbix_sender}", $"{Data.ServicePath}\\{Data.Zabbix_sender}", true);
+            }
+            catch (InvalidOperationException Ex)
+            {
+                Log.ErrorLog(Ex.ToString());
+            }
         }
         static void GetNewFile32()
         {
-            DellOldFile();
-            File.Copy($"{ Data.SharedPath32}\\{Data.Zabbixscr}", $"{Data.ServicePath}\\{Data.Zabbixscr}", true);
-            File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_agentd}", $"{Data.ServicePath}\\{Data.Zabbix_agentd}", true);
-            File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_agentd_conf}", $"{Data.ServicePath}\\{Data.Zabbix_agentd_conf}", true);
-            File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_get}", $"{Data.ServicePath}\\{Data.Zabbix_get}", true);
-            File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_sender}", $"{Data.ServicePath}\\{Data.Zabbix_sender}", true);
+            try
+            {
+                DellOldFile();
+                File.Copy($"{ Data.SharedPath32}\\{Data.Zabbixscr}", $"{Data.ServicePath}\\{Data.Zabbixscr}", true);
+                File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_agentd}", $"{Data.ServicePath}\\{Data.Zabbix_agentd}", true);
+                File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_agentd_conf}", $"{Data.ServicePath}\\{Data.Zabbix_agentd_conf}", true);
+                File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_get}", $"{Data.ServicePath}\\{Data.Zabbix_get}", true);
+                File.Copy($"{ Data.SharedPath32}\\{Data.Zabbix_sender}", $"{Data.ServicePath}\\{Data.Zabbix_sender}", true);
+            }
+            catch (InvalidOperationException Ex)
+            {
+                Log.ErrorLog(Ex.ToString());
+            }
         }
         static void DellOldFile()
         {
@@ -115,25 +157,32 @@ namespace zabbixinstall
             string Zabbix_agentd_conf = $"{Data.ServicePath} \\ {Data.Zabbix_agentd_conf}";
             string Zabbix_get = $"{Data.ServicePath} \\ {Data.Zabbix_get}";
             string Zabbix_sender = $"{Data.ServicePath} \\ {Data.Zabbix_sender}";
-            if (File.Exists(Zabbixscr))
+            try
             {
-                File.Delete(Zabbixscr);
+                if (File.Exists(Zabbixscr))
+                {
+                    File.Delete(Zabbixscr);
+                }
+                if (File.Exists(Zabbix_agentd))
+                {
+                    File.Delete(Zabbix_agentd);
+                }
+                if (File.Exists(Zabbix_agentd_conf))
+                {
+                    File.Delete(Zabbix_agentd_conf);
+                }
+                if (File.Exists(Zabbix_get))
+                {
+                    File.Delete(Zabbix_get);
+                }
+                if (File.Exists(Zabbix_sender))
+                {
+                    File.Delete(Zabbix_sender);
+                }
             }
-            if (File.Exists(Zabbix_agentd))
+            catch (InvalidOperationException Ex)
             {
-                File.Delete(Zabbix_agentd);
-            }
-            if (File.Exists(Zabbix_agentd_conf))
-            {
-                File.Delete(Zabbix_agentd_conf);
-            }
-            if (File.Exists(Zabbix_get))
-            {
-                File.Delete(Zabbix_get);
-            }
-            if (File.Exists(Zabbix_sender))
-            {
-                File.Delete(Zabbix_sender);
+                Log.ErrorLog(Ex.ToString());
             }
         }
     }
@@ -141,7 +190,7 @@ namespace zabbixinstall
     {
         public static void InstallZabbix()
         { 
-            string RootDir = Environment.GetFolderPath(Environment.SpecialFolder.System) + Data.FersInstall;
+            string RootDir = "C:" + Data.FersInstall;
             if (!Directory.Exists(RootDir))
             {
                 try
@@ -214,6 +263,10 @@ namespace zabbixinstall
                 {
                     Log.ErrorLog(Ex.ToString());
                 }
+            }
+            else
+            {
+                Update.UpdateService();
             }
         }
     }
